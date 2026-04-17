@@ -22,6 +22,7 @@ const app = express();
 const allowedOrigins = [
   "https://visaconsultancy.research-hero.com",
   "https://visabackend.research-hero.com",
+  "https://forestgreen-gaur-811230.hostingersite.com",
   "http://localhost:5173",
   "http://localhost:4000",
 ];
