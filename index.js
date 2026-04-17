@@ -19,8 +19,26 @@ const serviceTemplateRoute = require("./route/serviceTemplateRoute/serviceTempla
 const ticketBookingRoute = require("./route/ticketBookingRoute/ticketBookingRoute");
 const app = express();
 
-app.use(express.json());
-app.use(cors());
+const allowedOrigins = [
+  "https://visaconsultancy.research-hero.com",
+  "https://visabackend.research-hero.com",
+  "http://localhost:5173",
+  "http://localhost:4000",
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true); 
+    } else {
+      callback(new Error("Not allowed by CORS")); 
+    }
+  },
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+};
+app.use(cors(corsOptions));
+
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
