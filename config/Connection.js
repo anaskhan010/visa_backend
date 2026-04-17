@@ -8,7 +8,7 @@ const dbConfig = {
 host: "37.27.187.4",
   user: "root",
   password: "l51Qh6kM2vb3npALukrKNMzNAlBogTj0NSH4Gd3IxqMfaP0qfFkp54e7jcknqGNX",
-  database: "ai_agent",
+  database: "visa",
   port:  3306,
 };
 
