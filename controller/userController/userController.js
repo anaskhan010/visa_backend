@@ -19,6 +19,15 @@ const registerUser = async (req, res) => {
         message: "All required fields must be provided",
       });
     }
+
+    const emailExists = await userModel.checkEmailExists(email);
+    if (emailExists) {
+      return res.status(409).json({
+        success: false,
+        message: "Email already exists",
+      });
+    }
+
     const hashPassword = await bcrypt.hash(password, 10);
     const result = await userModel.registerUser(
       first_name,
@@ -61,6 +70,13 @@ const registerUser = async (req, res) => {
       data: result,
     });
   } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        success: false,
+        message: "Email already exists",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -100,6 +116,7 @@ const verifyEmail = async (req, res) => {
       return res.status(410).json({
         success: false,
         message: "Verification link has expired. Please request a new one.",
+        email: error.email || null,
       });
     }
 
@@ -141,7 +158,7 @@ const resendVerificationEmail = async (req, res) => {
 
     // Generate verification link with proper URL encoding
     const baseUrl = process.env.FRONTEND_URL;
-    const verificationLink = `${baseUrl}/verify-email?token=${encodeURIComponent(result.verificationToken)}`;
+    const verificationLink = `${baseUrl}/#/verify-email?token=${encodeURIComponent(result.verificationToken)}`;
 
     console.log(`[RESEND] Generated verification link: ${verificationLink}`);
     console.log(`[RESEND] Token from model: ${result.verificationToken}`);

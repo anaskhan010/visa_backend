@@ -62,6 +62,24 @@ const registerUser = async (
     }
   };
 
+const checkEmailExists = async (email) => {
+  const connection = await db.getConnection();
+
+  try {
+    const query = `
+      SELECT id
+      FROM users
+      WHERE email = ?
+      LIMIT 1
+    `;
+
+    const [rows] = await connection.query(query, [email]);
+    return rows.length > 0;
+  } finally {
+    connection.release();
+  }
+};
+
 const verifyEmailToken = async (token) => {
   const connection = await db.getConnection();
 
@@ -96,7 +114,9 @@ const verifyEmailToken = async (token) => {
 
       if (now > expiry) {
         console.log(`[VERIFY] Token expired for: ${user.email}`);
-        throw new Error("Verification token has expired");
+        const expiredError = new Error("Verification token has expired");
+        expiredError.email = user.email;
+        throw expiredError;
       }
 
       // Update user to mark email as verified and clear token
@@ -623,6 +643,7 @@ const updateSystemUser = async ({
 };
 
 module.exports = {
+    checkEmailExists,
     registerUser,
     verifyEmailToken,
     resendVerificationToken,

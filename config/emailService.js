@@ -40,7 +40,7 @@ exports.sendEmail = async ({ to, subject, htmlBody }) => {
 exports.sendVerificationEmail = async (email, verificationToken, verificationLink) => {
   const subject = "Verify Your Email Address";
   const htmlBody = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="font-family: Arial, sans-serif; max-width: full; margin: 0 auto;">
       <h2>Email Verification</h2>
       <p>Thank you for registering with us! Please verify your email address by clicking the link below:</p>
       <p style="margin: 20px 0;">
