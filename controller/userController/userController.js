@@ -31,7 +31,7 @@ const registerUser = async (req, res) => {
 
     // Generate verification link with proper URL encoding
     const baseUrl = process.env.FRONTEND_URL;
-    const verificationLink = `${baseUrl}/verify-email?token=${encodeURIComponent(result.verificationToken)}`;
+    const verificationLink = `${baseUrl}/#/verify-email?token=${encodeURIComponent(result.verificationToken)}`;
 
     console.log(`[REGISTER] Generated verification link: ${verificationLink}`);
     console.log(`[REGISTER] Token from model: ${result.verificationToken}`);
