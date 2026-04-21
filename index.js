@@ -72,7 +72,8 @@ app.listen(PORT, async() => {
   console.log(`Server running on port ${PORT}`);
 
   try {
-    await db.getConnection();
+    const connection = await db.getConnection();
+    connection.release();
     console.log("MySQL Database connected successfully");
   
   } catch (error) {

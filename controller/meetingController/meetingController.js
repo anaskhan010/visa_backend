@@ -1,5 +1,10 @@
 const db = require("../../config/Connection");
 const { sendEmail } = require("../../config/emailService");
+const {
+  buildConsoltoMeetingData,
+  enrichMeetingsWithConsolto,
+  getConsoltoConfig,
+} = require("../../utils/consoltoService");
 
 // Get all meetings for the logged-in user (Applicant)
 const getMyMeetings = async (req, res) => {
@@ -7,14 +12,17 @@ const getMyMeetings = async (req, res) => {
   try {
     const userId = req.user.userId;
     const [meetings] = await connection.query(
-      `SELECT m.*, u.first_name, u.last_name, u.email 
+      `SELECT m.*, u.first_name, u.last_name, u.email, u.phone
        FROM meetings m 
        JOIN users u ON m.user_id = u.id 
        WHERE m.user_id = ? 
        ORDER BY m.meeting_date DESC, m.meeting_time DESC`,
       [userId]
     );
-    return res.status(200).json({ success: true, data: meetings });
+    return res.status(200).json({
+      success: true,
+      data: enrichMeetingsWithConsolto(meetings, req.user),
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   } finally {
@@ -32,7 +40,10 @@ const getAllMeetings = async (req, res) => {
        JOIN users u ON m.user_id = u.id 
        ORDER BY m.meeting_date DESC, m.meeting_time DESC`
     );
-    return res.status(200).json({ success: true, data: meetings });
+    return res.status(200).json({
+      success: true,
+      data: enrichMeetingsWithConsolto(meetings, req.user),
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   } finally {
@@ -167,7 +178,10 @@ const scheduleMeeting = async (req, res) => {
     return res.status(201).json({ 
       success: true, 
       message: 'Meeting scheduled successfully. Waiting for approval.',
-      data: { id: result.insertId }
+      data: {
+        id: result.insertId,
+        provider: getConsoltoConfig(),
+      }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -183,7 +197,7 @@ const approveMeeting = async (req, res) => {
     const { id } = req.params;
 
     const [meetings] = await connection.query(
-      `SELECT m.*, u.first_name, u.last_name, u.email 
+      `SELECT m.*, u.first_name, u.last_name, u.email, u.phone
        FROM meetings m 
        JOIN users u ON m.user_id = u.id 
        WHERE m.id = ?`,
@@ -200,6 +214,9 @@ const approveMeeting = async (req, res) => {
       `UPDATE meetings SET status = 'approved' WHERE id = ?`,
       [id]
     );
+
+    const approvedMeeting = { ...meeting, status: 'approved' };
+    const consoltoMeeting = buildConsoltoMeetingData(approvedMeeting, req.user);
 
     // Send approval email to applicant
     try {
@@ -226,6 +243,13 @@ const approveMeeting = async (req, res) => {
                 <p style="margin: 8px 0;"><strong>Time:</strong> ${meeting.meeting_time}</p>
                 <p style="margin: 8px 0;"><strong>Purpose:</strong> ${meeting.purpose || 'Visa Consultation'}</p>
               </div>
+              ${consoltoMeeting.launchUrl ? `
+                <div style="margin: 20px 0;">
+                  <a href="${consoltoMeeting.launchUrl}" style="display: inline-block; background: #667eea; color: white; text-decoration: none; padding: 12px 18px; border-radius: 8px; font-weight: bold;">
+                    Join your meeting in Consolto
+                  </a>
+                </div>
+              ` : ''}
               <p style="color: #666;">Please make sure to be available at the scheduled time.</p>
               <p style="color: #666; margin-top: 20px;">Best regards,<br>Visa Consultancy Team</p>
             </div>
@@ -237,7 +261,16 @@ const approveMeeting = async (req, res) => {
       console.error('Failed to send approval email:', emailError.message);
     }
 
-    return res.status(200).json({ success: true, message: 'Meeting approved successfully' });
+    return res.status(200).json({
+      success: true,
+      message: 'Meeting approved successfully',
+      data: {
+        meeting: {
+          ...approvedMeeting,
+          consolto: consoltoMeeting,
+        },
+      },
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   } finally {

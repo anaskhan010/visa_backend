@@ -3,6 +3,26 @@ const emailService = require("../../config/emailService");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+const getFrontendBaseUrl = () => {
+  const rawUrl = process.env.FRONTEND_URL || "";
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    parsedUrl.hash = "";
+
+    if (parsedUrl.pathname === "/login" || parsedUrl.pathname === "/login/") {
+      parsedUrl.pathname = "/";
+    }
+
+    return parsedUrl.toString().replace(/\/$/, "");
+  } catch (error) {
+    return rawUrl
+      .replace(/#.*$/, "")
+      .replace(/\/login\/?$/, "")
+      .replace(/\/$/, "");
+  }
+};
+
 const registerUser = async (req, res) => {
   const {
     first_name,
@@ -39,7 +59,7 @@ const registerUser = async (req, res) => {
     );
 
     // Generate verification link with proper URL encoding
-    const baseUrl = process.env.FRONTEND_URL;
+    const baseUrl = getFrontendBaseUrl();
     const verificationLink = `${baseUrl}/#/verify-email?token=${encodeURIComponent(result.verificationToken)}`;
 
     console.log(`[REGISTER] Generated verification link: ${verificationLink}`);
@@ -157,7 +177,7 @@ const resendVerificationEmail = async (req, res) => {
     const result = await userModel.resendVerificationToken(email);
 
     // Generate verification link with proper URL encoding
-    const baseUrl = process.env.FRONTEND_URL;
+    const baseUrl = getFrontendBaseUrl();
     const verificationLink = `${baseUrl}/#/verify-email?token=${encodeURIComponent(result.verificationToken)}`;
 
     console.log(`[RESEND] Generated verification link: ${verificationLink}`);
@@ -213,6 +233,14 @@ const resendVerificationEmail = async (req, res) => {
 
 const loginUser = async (req, res) => {
   const { email, password } = req.body;
+  const transientDbErrorCodes = new Set([
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ECONNREFUSED",
+    "PROTOCOL_CONNECTION_LOST",
+    "PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR",
+    "PROTOCOL_ENQUEUE_AFTER_QUIT",
+  ]);
 
   try {
     // Validate input
@@ -267,7 +295,7 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.log(`[LOGIN] Error: ${error.message}`);
+    console.log(`[LOGIN] Error: ${error.code || "UNKNOWN"} ${error.message}`);
 
     if (error.message === "User not found") {
       return res.status(404).json({
@@ -287,6 +315,13 @@ const loginUser = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Your account has been deactivated",
+      });
+    }
+
+    if (transientDbErrorCodes.has(error.code)) {
+      return res.status(503).json({
+        success: false,
+        message: "Temporary database connection issue. Please try again.",
       });
     }
 

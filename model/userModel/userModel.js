@@ -1,6 +1,17 @@
 const db = require("../../config/Connection");
 const crypto = require("crypto");
 
+const transientDbErrorCodes = new Set([
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ECONNREFUSED",
+  "PROTOCOL_CONNECTION_LOST",
+  "PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR",
+  "PROTOCOL_ENQUEUE_AFTER_QUIT",
+]);
+
+const isTransientDbError = (error) => transientDbErrorCodes.has(error?.code);
+
 const registerUser = async (
     first_name,
     last_name,
@@ -206,57 +217,64 @@ const resendVerificationToken = async (email) => {
 
 
 const loginUser = async (email) => {
-  const connection = await db.getConnection();
+  const query = `
+    SELECT 
+      u.id, 
+      u.first_name, 
+      u.last_name, 
+      u.email, 
+      u.phone, 
+      u.password_hash, 
+      u.email_verified, 
+      u.status,
+      ur.role_id,
+      r.name AS role_name
+    FROM users AS u
+    JOIN user_roles AS ur ON u.id = ur.user_id
+    JOIN roles AS r on ur.role_id = r.id
+    WHERE email = ?
+  `;
 
-  try {
-    console.log(`[LOGIN] Attempting login for: ${email}`);
+  console.log(`[LOGIN] Attempting login for: ${email}`);
 
-    const query = `
-      SELECT 
-        u.id, 
-        u.first_name, 
-        u.last_name, 
-        u.email, 
-        u.phone, 
-        u.password_hash, 
-        u.email_verified, 
-        u.status,
-        ur.role_id,
-        r.name AS role_name
-      FROM users AS u
-      JOIN user_roles AS ur ON u.id = ur.user_id
-      JOIN roles AS r on ur.role_id = r.id
-      WHERE email = ?
-    `;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const connection = await db.getConnection();
 
-    const [rows] = await connection.query(query, [email]);
+    try {
+      const [rows] = await connection.query(query, [email]);
 
-    if (rows.length === 0) {
-      console.log(`[LOGIN] User not found: ${email}`);
-      throw new Error("User not found");
+      if (rows.length === 0) {
+        console.log(`[LOGIN] User not found: ${email}`);
+        throw new Error("User not found");
+      }
+
+      const user = rows[0];
+
+      if (!user.email_verified || user.email_verified === 0 || user.email_verified === false) {
+        console.log(`[LOGIN] Email not verified for: ${email}`);
+        throw new Error("Email not verified");
+      }
+
+      if (user.status !== "active" && user.status !== 1) {
+        console.log(`[LOGIN] Account inactive for: ${email}`);
+        throw new Error("Account is inactive");
+      }
+
+      console.log(`[LOGIN] User verified and active: ${email}`);
+      return user;
+    } catch (error) {
+      if (attempt < 2 && isTransientDbError(error)) {
+        console.warn(
+          `[LOGIN] Retrying login query for ${email} after transient DB error: ${error.code}`
+        );
+        continue;
+      }
+
+      console.log(`[LOGIN] Error: ${error.code || "UNKNOWN"} ${error.message}`);
+      throw error;
+    } finally {
+      connection.release();
     }
-
-    const user = rows[0];
-
-    
-    if (!user.email_verified || user.email_verified === 0 || user.email_verified === false) {
-      console.log(`[LOGIN] Email not verified for: ${email}`);
-      throw new Error("Email not verified");
-    }
-
-    
-    if (user.status !== "active" && user.status !== 1) {
-      console.log(`[LOGIN] Account inactive for: ${email}`);
-      throw new Error("Account is inactive");
-    }
-
-    console.log(`[LOGIN] User verified and active: ${email}`);
-    return user;
-  } catch (error) {
-    console.log(`[LOGIN] Error: ${error.message}`);
-    throw error;
-  } finally {
-    connection.release();
   }
 };
 
