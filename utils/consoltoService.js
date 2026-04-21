@@ -111,7 +111,10 @@ const buildMeetingMessage = (meeting = {}) =>
 const getConsoltoConfig = () => {
   const clickntalkBaseUrl = buildClickntalkBaseUrl();
   const fallbackClickntalkBaseUrl = buildDefaultConsoltoBaseUrl();
-  const appointmentCenterUrl = normalizeUrl(process.env.CONSOLTO_APPOINTMENT_CENTER_URL);
+  const appointmentCenterUrl =
+    normalizeUrl(process.env.CONSOLTO_APPOINTMENT_CENTER_URL) ||
+    clickntalkBaseUrl ||
+    fallbackClickntalkBaseUrl;
 
   return {
     enabled: Boolean(clickntalkBaseUrl),
